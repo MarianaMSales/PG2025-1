@@ -2,6 +2,8 @@
 #include <string>
 #include <assert.h>
 #include <vector>
+#include <thread>
+#include <chrono>
 
 using namespace std;
 
@@ -20,10 +22,12 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 GLuint createSquare();
 int setupShader();
+int eliminateSimilarColors(float tolerance);
 
 const GLuint WIDTH = 800, HEIGHT = 600;
 const GLuint ROWS = 6, COLUMNS = 8;
 const GLuint SQUARE_WIDTH = 100, SQUARE_HEIGHT = 100;
+const float maxDistance = sqrt(3.0f); 
 
 const GLchar* vertexShaderSource = "#version 400\n"
 "layout (location = 0) in vec3 position;\n"
@@ -51,15 +55,17 @@ struct Square {
 
 vector<Square> squares;
 
+int iSelected = -1;
+
 Square grid[ROWS][COLUMNS];
 
 int main()
 {
-    srand(glfwGetTime());
+    srand(time(0));
     
     glfwInit();
 
-    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Ola Triangulo! -- Rossana", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Jogo das cores! ", nullptr, nullptr);
     glfwMakeContextCurrent(window);
 
     glfwSetKeyCallback(window, key_callback);
@@ -117,41 +123,62 @@ int main()
 
     glUniform4f(colorLoc, 1.0f, 0.0f, 0.5f, 1.0f);
 
+    int score = 0;
+    int attempts = 0;
+    const int maxScore = 100;
+    const int penalty = 10;
+    bool gameOver = false;
+    bool scoreShown = false;
+
     while (!glfwWindowShouldClose(window))
     {
         glfwPollEvents();
-
         glClearColor(1.0f, 0.8f, 0.9f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-
         glLineWidth(10);
         glPointSize(20);
-
         glBindVertexArray(VAO);
-
+        if (iSelected > -1 && !gameOver)
+        {
+            int eliminatedCount = eliminateSimilarColors(0.2f);
+            if (eliminatedCount > 0) {
+                int attemptScore = maxScore - attempts * penalty;
+                if (attemptScore < 0) attemptScore = 0;
+                score += attemptScore * eliminatedCount;
+            }
+            attempts++;
+            bool anyLeft = false;
+            for (int i = 0; i < ROWS; i++)
+                for (int j = 0; j < COLUMNS; j++)
+                    if (!grid[i][j].eliminated)
+                        anyLeft = true;
+            if (!anyLeft) gameOver = true;
+        }
         for (int i = 0; i < ROWS; i++)
-		{
+        {
             for (int j = 0; j < COLUMNS; j++)
             {
                 if (!grid[i][j].eliminated)
                 {
                     mat4 model = mat4(1); 
-			
                     model = translate(model, grid[i][j].position);
-                    
                     model = scale(model, grid[i][j].dimensions);
-
                     glUniformMatrix4fv(glGetUniformLocation(shaderID, "model"), 1, GL_FALSE, value_ptr(model));
-
                     glUniform4f(colorLoc, grid[i][j].color.r, grid[i][j].color.g, grid[i][j].color.b, 1.0f); 
-
-                    glDrawArrays(GL_TRIANGLE_STRIP, 0, 6); 
+                    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4); 
                 }
             }
-		}
-        
+        }
         glBindVertexArray(0);
-
+        if (gameOver && !scoreShown) {
+            std::string scoreText = "Pontuacao final: " + std::to_string(score);
+            glfwSetWindowTitle(window, scoreText.c_str());
+            std::cout << scoreText << std::endl;
+            scoreShown = true;
+        } else if (gameOver && scoreShown) {
+            std::this_thread::sleep_for(std::chrono::seconds(3));
+            glfwSetWindowShouldClose(window, GL_TRUE);
+        }
         glfwSwapBuffers(window);
     }
     glfwTerminate();
@@ -168,11 +195,14 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
     {
-       double xpos, ypos;
+        double xpos, ypos;
         glfwGetCursorPos(window, &xpos, &ypos);
         cout << xpos << "  " << ypos << " -----  ";
         cout << xpos / SQUARE_WIDTH << "  " << ypos / SQUARE_HEIGHT << endl;
-        grid[(int) ypos/SQUARE_HEIGHT][(int) xpos/SQUARE_WIDTH].eliminated = true;
+        int x = (int) xpos / SQUARE_WIDTH;
+        int y = (int) ypos / SQUARE_HEIGHT;
+        grid[x][y].eliminated = true;
+        iSelected = x + y * COLUMNS;
     }
 }
 
@@ -184,29 +214,35 @@ int setupShader()
     GLint success;
     GLchar infoLog[512];
     glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    
     if (!success)
     {
         glGetShaderInfoLog(vertexShader, 512, NULL, infoLog);
         std::cout << "ERROR::SHADER::VERTEX::COMPILATION_FAILED\n" << infoLog << std::endl;
     }
+
     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
     glCompileShader(fragmentShader);
     glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+    
     if (!success)
     {
         glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
         std::cout << "ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n" << infoLog << std::endl;
     }
+
     GLuint shaderProgram = glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
     glAttachShader(shaderProgram, fragmentShader);
     glLinkProgram(shaderProgram);
     glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+
     if (!success) {
         glGetProgramInfoLog(shaderProgram, 512, NULL, infoLog);
         std::cout << "ERROR::SHADER::PROGRAM::LINKING_FAILED\n" << infoLog << std::endl;
     }
+
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
@@ -242,4 +278,34 @@ GLuint createSquare()
     glBindVertexArray(0); 
     
     return VAO; 
+}
+
+int eliminateSimilarColors(float tolerance)
+{
+    int x = iSelected % COLUMNS;
+    int y = iSelected / COLUMNS;
+    vec3 keyColor = grid[y][x].color;
+    int eliminatedCount = 0;
+    if (!grid[y][x].eliminated) {
+        grid[y][x].eliminated = true;
+        eliminatedCount++;
+    }
+    for (int i = 0; i < ROWS; i++)
+    {
+        for (int j = 0; j < COLUMNS; j++)
+        {
+            vec3 currentColor = grid[i][j].color;
+            float distance = sqrt(pow(currentColor.r - keyColor.r, 2) + 
+                                  pow(currentColor.g - keyColor.g, 2) + 
+                                  pow(currentColor.b - keyColor.b, 2));
+            float dd = distance / maxDistance;
+            if (dd < tolerance && !grid[i][j].eliminated)
+            {
+                grid[i][j].eliminated = true;
+                eliminatedCount++;
+            }
+        }
+    }
+    iSelected = -1;
+    return eliminatedCount;
 }
