@@ -19,6 +19,8 @@ O **JogoDasCores** tem como objetivo eliminar quadrados coloridos em uma grade. 
 - A pontuação é calculada com base no número de quadrados eliminados e no número de tentativas.
 - Quanto menos tentativas, maior a pontuação.
 - A pontuação final é exibida ao final do jogo no título da janela.
+![image](https://github.com/user-attachments/assets/c42e0a94-4e08-4ea2-99e8-8c55d4a4c25b)
+
 
 ## Controles
 
