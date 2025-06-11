@@ -54,6 +54,7 @@ set(EXERCISES
     HelloTransform
     HelloTexture
     HelloSprite
+    HelloAnimatedSprite
     Modulo2/Ex1Parte1M2
     Modulo2/Ex1Parte2M2
     Modulo3/M3JogoCores
@@ -62,6 +63,7 @@ set(EXERCISES
     DesafioM2/Exercicio1
     DesafioM2/Exercicio2
     DesafioM3/JogoDasCores
+    DesafioM4/DesafioM4
 )
 
 add_compile_options(-Wno-pragmas)
